@@ -1,0 +1,252 @@
+CLASS zakb_cl_flight_service DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC.
+
+  PUBLIC SECTION.
+
+    METHODS constructor.
+    METHODS refresh_data_for_display.
+    METHODS reset_attributes.
+
+    METHODS create_field_catalog
+      IMPORTING !iv_structure_name      TYPE dd02l-tabname
+      RETURNING VALUE(rt_field_catalog) TYPE lvc_t_fcat .
+
+    METHODS create_layout
+      RETURNING VALUE(rs_layout) TYPE lvc_s_layo.
+
+    METHODS get_flight_data
+      RETURNING VALUE(rt_flight_details) TYPE spfli_tab.
+
+    METHODS get_filtered_flight_data
+      IMPORTING !iv_from_country           TYPE spfli-countryfr
+                !iv_to_country             TYPE spfli-countryto
+      RETURNING VALUE(rt_filtered_flights) TYPE spfli_tab.
+
+    METHODS set_data_for_display
+      IMPORTING !iv_structure_name TYPE dd02l-tabname.
+
+    METHODS set_executed_action
+      IMPORTING !iv_executed_status TYPE abap_boolean .
+
+    METHODS get_executed_action
+      RETURNING VALUE(rv_executed_status) TYPE abap_boolean .
+
+    METHODS set_filter_status_on
+      IMPORTING !iv_filter_status TYPE abap_boolean.
+
+    METHODS get_filter_status_on
+      RETURNING VALUE(rv_filter_status) TYPE abap_boolean.
+
+    METHODS set_country_from_to
+      IMPORTING !iv_from_country TYPE spfli-countryfr
+                !iv_to_country   TYPE spfli-countryto.
+
+    METHODS get_filtered_data_amount
+      RETURNING VALUE(rv_result) TYPE int1.
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+    " ALV data definition
+    DATA mo_custom_container TYPE REF TO cl_gui_custom_container.
+    DATA mo_grid TYPE REF TO cl_gui_alv_grid.
+    DATA mt_fieldcat TYPE STANDARD TABLE OF lvc_s_fcat.
+    DATA mv_variant  TYPE disvariant.
+
+    " Flight data definition
+    DATA mt_flight_details   TYPE STANDARD TABLE OF spfli.
+    DATA mt_filtered_flights TYPE STANDARD TABLE OF spfli.
+
+    " Filter attributes
+    DATA mv_filter_status   TYPE abap_boolean.
+    DATA mv_executed_action TYPE abap_boolean.
+    DATA ms_country_from_to    TYPE spfli.
+
+ENDCLASS.
+
+
+
+CLASS ZAKB_CL_FLIGHT_SERVICE IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->CONSTRUCTOR
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD constructor.
+    mo_custom_container = NEW cl_gui_custom_container( container_name = 'CONT' ).
+
+    IF mo_custom_container IS BOUND.
+      mo_grid = NEW cl_gui_alv_grid( i_parent = mo_custom_container ).
+    ENDIF.
+
+    mv_variant-report = sy-repid.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->CREATE_FIELD_CATALOG
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_STRUCTURE_NAME              TYPE        DD02L-TABNAME
+* | [<-()] RT_FIELD_CATALOG               TYPE        LVC_T_FCAT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD create_field_catalog.
+    " Create the field catalog for the given structure name
+    CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+      EXPORTING
+        i_structure_name       = iv_structure_name
+        i_client_never_display = abap_true
+      CHANGING
+        ct_fieldcat            = rt_field_catalog.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->CREATE_LAYOUT
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RS_LAYOUT                      TYPE        LVC_S_LAYO
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD create_layout.
+    " Set the layout features
+    rs_layout-grid_title = 'Flight schedule entries'.
+    rs_layout-zebra = abap_true.
+    rs_layout-no_toolbar = abap_true.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->GET_EXECUTED_ACTION
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RV_EXECUTED_STATUS             TYPE        ABAP_BOOLEAN
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_executed_action.
+    rv_executed_status = mv_executed_action.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->GET_FILTERED_DATA_AMOUNT
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RV_RESULT                      TYPE        INT1
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_filtered_data_amount.
+    CHECK get_executed_action( ).
+
+    rv_result = REDUCE i( INIT x = 0 FOR ls_flight IN get_flight_data( ) WHERE ( countryfr = ms_country_from_to-countryfr AND countryto = ms_country_from_to-countryto )
+                          NEXT x = x + 1 ).
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->GET_FILTERED_FLIGHT_DATA
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FROM_COUNTRY                TYPE        SPFLI-COUNTRYFR
+* | [--->] IV_TO_COUNTRY                  TYPE        SPFLI-COUNTRYTO
+* | [<-()] RT_FILTERED_FLIGHTS            TYPE        SPFLI_TAB
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_filtered_flight_data.
+    " Filter the flight data regarding the filter values
+    rt_filtered_flights = VALUE #( FOR ls_flight_detail IN get_flight_data( ) WHERE ( countryfr = iv_from_country AND countryto = iv_to_country )
+                                                                                    ( CORRESPONDING #( ls_flight_detail ) ) ).
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->GET_FILTER_STATUS_ON
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RV_FILTER_STATUS               TYPE        ABAP_BOOLEAN
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_filter_status_on.
+    rv_filter_status = mv_filter_status.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->GET_FLIGHT_DATA
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RT_FLIGHT_DETAILS              TYPE        SPFLI_TAB
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_flight_data.
+    " Get the all the data from flight table
+    SELECT * FROM spfli
+       INTO TABLE @rt_flight_details.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->REFRESH_DATA_FOR_DISPLAY
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD refresh_data_for_display.
+    mo_grid->refresh_table_display( is_stable = VALUE #( row = abap_true col = abap_true )
+                                    i_soft_refresh = space ).
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->RESET_ATTRIBUTES
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD reset_attributes.
+    CLEAR : ms_country_from_to,
+            mv_executed_action,
+            ms_country_from_to.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->SET_COUNTRY_FROM_TO
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FROM_COUNTRY                TYPE        SPFLI-COUNTRYFR
+* | [--->] IV_TO_COUNTRY                  TYPE        SPFLI-COUNTRYTO
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD set_country_from_to.
+    " Set the values of country from and country to
+    ms_country_from_to = VALUE #( countryfr = iv_from_country
+                                  countryto = iv_to_country ).
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->SET_DATA_FOR_DISPLAY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_STRUCTURE_NAME              TYPE        DD02L-TABNAME
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD set_data_for_display.
+    " Get the field catalog
+    mt_fieldcat = COND #( WHEN mt_fieldcat IS INITIAL THEN create_field_catalog( iv_structure_name )
+                          ELSE mt_fieldcat ).
+
+    " Check if filter is set
+    DATA(lt_flight_to_show) = COND #( WHEN get_filter_status_on( ) AND get_executed_action( ) THEN get_filtered_flight_data( iv_from_country = ms_country_from_to-countryfr
+                                                                                                                             iv_to_country   = ms_country_from_to-countryto )
+                                      ELSE get_flight_data( ) ).
+
+    mo_grid->set_table_for_first_display( EXPORTING is_variant      = mv_variant
+                                                    i_save          = 'A'
+                                                    is_layout       = create_layout( )
+                                         CHANGING   it_outtab       = lt_flight_to_show
+                                                    it_fieldcatalog = mt_fieldcat ).
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->SET_EXECUTED_ACTION
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_EXECUTED_STATUS             TYPE        ABAP_BOOLEAN
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD set_executed_action.
+    mv_executed_action = iv_executed_status.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZAKB_CL_FLIGHT_SERVICE->SET_FILTER_STATUS_ON
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FILTER_STATUS               TYPE        ABAP_BOOLEAN
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD set_filter_status_on.
+    mv_filter_status = iv_filter_status.
+  ENDMETHOD.
+ENDCLASS.
