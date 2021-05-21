@@ -1,0 +1,139 @@
+*&---------------------------------------------------------------------*
+*& Report ZAKB_FLIGHT_SERVICE
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zakb_flight_service.
+CONSTANTS cv_structure_name TYPE dd02l-tabname VALUE 'SPFLI'.
+
+DATA lv_alv_sub_screen    TYPE sy-dynnr.
+DATA lv_filter_sub_screen TYPE sy-dynnr.
+DATA lv_count_screen      TYPE sy-dynnr.
+DATA lv_filter_screen_on  TYPE abap_boolean.
+DATA lv_filter_executed   TYPE abap_boolean.
+
+DATA lv_display TYPE abap_boolean.
+DATA lv_filter  TYPE abap_boolean.
+
+DATA lv_from_city TYPE spfli-countryfr.
+DATA lv_to_city   TYPE spfli-countryto.
+
+DATA lt_fieldcat TYPE STANDARD TABLE OF lvc_s_fcat.
+DATA lv_variant  TYPE disvariant.
+DATA ls_layout   TYPE lvc_s_layo.
+DATA lt_filtered_flights TYPE STANDARD TABLE OF spfli.
+DATA lv_count_on_filter  TYPE i.
+
+*lv_variant-report = sy-repid.
+*
+*DATA(lo_custom_container) = NEW cl_gui_custom_container( container_name = 'CONT' ).
+*
+*IF lo_custom_container IS BOUND.
+*  DATA(lo_grid) = NEW cl_gui_alv_grid( i_parent = lo_custom_container ).
+*ENDIF.
+
+DATA(lo_flight_service) = NEW zakb_cl_flight_service( ).
+
+*SELECT * FROM spfli
+* INTO TABLE @DATA(lt_flight_details).
+
+CALL SCREEN 9000.
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_9000  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_9000 INPUT.
+  CASE sy-ucomm.
+    WHEN 'BACK'.
+      LEAVE TO SCREEN 0.
+    WHEN 'EXIT'.
+      LEAVE PROGRAM.
+    WHEN 'GR1'.
+      CLEAR: lv_from_city, lv_to_city." lt_filtered_flights, lv_filter_executed, lv_count_on_filter.
+*      lv_filter_screen_on = COND #( WHEN lv_filter = abap_true THEN abap_true
+*                                    ELSE abap_false ).
+      " Reset the class attributes
+      lo_flight_service->reset_attributes( ).
+
+      " Set filter value if radio button is clicked
+      lo_flight_service->set_filter_status_on( lv_filter ).
+
+    WHEN 'EXECUTE'.
+*      lv_filter_executed = abap_true.
+*      lt_filtered_flights = VALUE #( FOR ls_flight_detail IN lt_flight_details WHERE ( countryfr = lv_from_city AND countryto = lv_to_city )
+*                                                                                     ( CORRESPONDING #( ls_flight_detail ) ) ).
+      lo_flight_service->set_executed_action( abap_true ).
+
+      lo_flight_service->set_country_from_to( iv_from_country = lv_from_city
+                                              iv_to_country   = lv_to_city ).
+    WHEN OTHERS.
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Module STATUS_9000 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_9000 OUTPUT.
+  SET PF-STATUS 'ZAKB_EMP_PF_STAT'.
+  lv_alv_sub_screen = 9001.
+  lv_count_screen   = 9002.
+
+  LOOP AT SCREEN.
+    CHECK screen-name = 'LV_FROM_CITY' OR screen-name = 'LV_TO_CITY'.
+    screen-input = COND #( WHEN lo_flight_service->get_filter_status_on( ) THEN 1
+                           ELSE 0 ).
+    MODIFY SCREEN.
+  ENDLOOP.
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*& Module STATUS_9001 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_9001 OUTPUT.
+*  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+*    EXPORTING
+*      i_structure_name       = 'SPFLI'
+*      i_client_never_display = abap_true
+*    CHANGING
+*      ct_fieldcat            = lt_fieldcat.
+*
+*  ls_layout-grid_title = 'Flight schedule entries'.
+*  ls_layout-zebra = 'X'.
+*  ls_layout-no_toolbar = 'X'.
+*
+*  DATA(lt_flight_to_show) = COND #( WHEN lv_filter_screen_on = abap_true AND lv_filter_executed = abap_true THEN lt_filtered_flights
+*                                    ELSE lt_flight_details ).
+*
+*  IF lv_filter_executed = abap_true.
+*    lo_grid->refresh_table_display( is_stable = VALUE #( row = abap_true col = abap_true )
+*                                    i_soft_refresh = space ).
+*  ELSE.
+*    lo_grid->set_table_for_first_display( EXPORTING is_variant      = lv_variant
+*                                                    i_save          = 'A'
+*                                                    is_layout       = ls_layout
+*                                         CHANGING   it_outtab       = lt_flight_to_show
+*                                                    it_fieldcatalog = lt_fieldcat ).
+*  ENDIF.
+
+  lo_flight_service->set_data_for_display( cv_structure_name ).
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Module STATUS_9002 OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE status_9002 OUTPUT.
+*  CLEAR lv_count_on_filter.
+*  CHECK lv_filter_executed = abap_true.
+*
+*  lv_count_on_filter = REDUCE i( INIT x = 0 FOR ls_flight IN lt_flight_details WHERE ( countryfr = lv_from_city AND countryto = lv_to_city )
+*                                 NEXT x = x + 1 ).
+
+*  lv_count_on_filter = lines( lt_filtered_flights ).
+  lv_count_on_filter = lo_flight_service->get_filtered_data_amount( ).
+ENDMODULE.
