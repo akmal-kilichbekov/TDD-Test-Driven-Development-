@@ -1,0 +1,125 @@
+*"* use this source file for your ABAP unit test classes
+CLASS ltc_zakb_cl_flight_service DEFINITION FOR TESTING
+  RISK LEVEL HARMLESS
+  DURATION SHORT.
+
+  PRIVATE SECTION.
+    CLASS-DATA go_osql_environment TYPE REF TO if_osql_test_environment.
+
+    DATA mo_cut TYPE REF TO zakb_cl_flight_service.
+    DATA mt_flight_mock_data TYPE STANDARD TABLE OF spfli.
+
+    CLASS-METHODS class_setup.
+    CLASS-METHODS class_teardown.
+
+    METHODS setup.
+    METHODS teardown.
+
+    METHODS create_field_catalog     FOR TESTING.
+    METHODS create_fld_catalog_empty FOR TESTING.
+    METHODS create_layout   FOR TESTING.
+    METHODS get_flight_data FOR TESTING.
+    METHODS get_filtered_data FOR TESTING.
+
+ENDCLASS.
+
+CLASS ltc_zakb_cl_flight_service IMPLEMENTATION.
+  METHOD class_setup.
+    " Create test environment instance
+    go_osql_environment = cl_osql_test_environment=>create( i_dependency_list = VALUE #( ( 'SPFLI' ) ) ).
+  ENDMETHOD.
+
+  METHOD class_teardown.
+    " Clear test environment
+    go_osql_environment->destroy( ).
+  ENDMETHOD.
+
+  METHOD setup.
+    " Create instance of class under test
+    mo_cut = NEW #( ).
+
+    " Create mock data
+    mt_flight_mock_data = VALUE #( ( carrid = 'AA' countryfr = 'US' cityfrom = 'NEW YORK'  countryto = 'US' cityto = 'SAN FRANCISCO' )
+                                   ( carrid = 'AZ' countryfr = 'IT' cityfrom = 'ROME'      countryto = 'DE' cityto = 'FRANKFURT' )
+                                   ( carrid = 'LH' countryfr = 'DE' cityfrom = 'FRANKFURT' countryto = 'US' cityto = 'NEW YORK' )
+                                   ( carrid = 'TH' countryfr = 'DE' cityfrom = 'FRANKFURT' countryto = 'IT' cityto = 'ROME' )
+                                   ( carrid = 'UA' countryfr = 'DE' cityfrom = 'FRANKFURT' countryto = 'US' cityto = 'SAN FRANCISCO' ) ).
+
+    " Insert data to test environment
+    go_osql_environment->insert_test_data( mt_flight_mock_data ).
+  ENDMETHOD.
+
+  METHOD teardown.
+    " Free the instance of class under test
+    CLEAR mo_cut.
+
+    " Clear mock data
+    go_osql_environment->clear_doubles( ).
+  ENDMETHOD.
+
+  METHOD create_field_catalog.
+    DATA lv_structure_name TYPE dd02l-tabname.
+
+    " Given
+    lv_structure_name = 'MAKT'.
+
+    " When
+    DATA(lt_field_catalogs) = mo_cut->create_field_catalog( lv_structure_name ).
+
+    " Then
+    cl_abap_unit_assert=>assert_equals( act = lt_field_catalogs[ 3 ]-fieldname
+                                        exp = 'SPRAS'
+                                        msg = 'Field catalog does not work correctly' ).
+
+  ENDMETHOD.
+
+  METHOD create_layout.
+    " You can fill this method to make practise
+  ENDMETHOD.
+
+  METHOD create_fld_catalog_empty.
+    DATA lv_structure_name TYPE dd02l-tabname.
+
+    " Given
+    lv_structure_name = 'TTTT'.
+
+    " When
+    DATA(lt_field_catalogs) = mo_cut->create_field_catalog( lv_structure_name ).
+
+    " Then
+    cl_abap_unit_assert=>assert_initial( lt_field_catalogs ).
+  ENDMETHOD.
+
+  METHOD get_flight_data.
+    " When
+    DATA(lt_flight_data) = mo_cut->get_flight_data( ).
+
+    " Then
+    cl_abap_unit_assert=>assert_equals( act = lt_flight_data[ 1 ]-countryfr
+                                        exp = 'US' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lt_flight_data[ 2 ]-countryto
+                                        exp = 'DE' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lt_flight_data[ 3 ]-cityfrom
+                                        exp = 'FRANKFURT' ).
+  ENDMETHOD.
+
+  METHOD get_filtered_data.
+    DATA lv_country_from TYPE spfli-countryfr.
+    DATA lv_country_to   TYPE spfli-countryto.
+
+    " Given
+    lv_country_from = 'DE'.
+    lv_country_to   = 'US'.
+
+    " When
+    DATA(lt_filtered_data) = mo_cut->get_filtered_flight_data( iv_from_country = lv_country_from
+                                                               iv_to_country   = lv_country_to ).
+
+    " Then
+    cl_abap_unit_assert=>assert_equals( act = lines( lt_filtered_data )
+                                        exp = 2 ).
+  ENDMETHOD.
+
+ENDCLASS.
